@@ -4,7 +4,7 @@ This is the main code of the ECAPATDNN project, to define the parameters and bui
 
 import argparse, glob, os, torch, warnings, time, torch.nn as nn
 from tools import *
-from dataLoader import train_loader, test_loader
+from dataLoader import deal_train_loader, origin_train_loader, test_loader
 from ModelMaster import ModelMaster
 from model import Ecapa_Tdnn_Model
 import random, math
@@ -13,8 +13,8 @@ import random, math
 parser = argparse.ArgumentParser(description="New_Ecapa_trainer")
 parser.add_argument('--n', type=int, default=1, help='Number of order/head? num')
 
-parser.add_argument('--batch_size', type=int, default=128, help='Batch size  300  try 64 128')
-parser.add_argument('--n_cpu', type=int, default=10, help='Number of train threads 15')
+parser.add_argument('--batch_size', type=int, default=2, help='Batch size  300  try 64 128')
+parser.add_argument('--n_cpu', type=int, default=1, help='Number of train threads 15')
 parser.add_argument('--deviceno', type=int, default=0, help='device NUM')
 parser.add_argument('--C', type=int, default=512, help='新网络专用的通道数 512')
 # parser.add_argument('--C', type=int, default=1024, help='Channel size for the speaker encoder')
@@ -24,51 +24,25 @@ parser.add_argument('--s', type=float, default=30, help='Loss scale in AAM softm
 # Training and evaluation path/lists, save path
 parser.add_argument('--n_class', type=int, default=5994, help='Number of speakers 1211 | 5994')
 
-#学校服务器
+# 超算服务器
 
 parser.add_argument('--train_list', type=str, default="exps/vox2_train.txt",
-					help='The path of the training list, https://www.robots.ox.ac.cuk/~vgg/data/voxceleb/meta/train_list.txt')
-parser.add_argument('--train_path', type=str, default="../wav",
-					help='/g813_u1/wmnt/voxceleb/vox2_dev_wav/wav        The path of the training DAE_data, eg:"/data08/VoxCeleb2/train/wav" in my case')
+					help='The path of the training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
+parser.add_argument('--train_path', type=str, default="/root/private_data/wmnt/voxceleb/vox2_dev_wav",
+					help='The path of the training DAE_data, eg:"/data08/VoxCeleb2/train/wav" in my case')
 # parser.add_argument('--train_list', type=str, default="exps/vox1_train_v2.txt",
 #                     help='The path of the training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
-# parser.add_argument('--train_path', type=str, default="/g813_u1/wmnt/voxceleb/vox1_dev_wav/wav",
+# parser.add_argument('--train_path', type=str, default="/root/private_data/wmnt/voxceleb/vox1_dev_wav",
 #                     help='The path of the training DAE_data, eg:"/data08/VoxCeleb2/train/wav" in my case')
-parser.add_argument('--eval_path', type=list, default=["/g813_u1/wmnt/voxceleb/vox1_test_wav"],
+parser.add_argument('--eval_path', type=list, default=["/root/private_data/wmnt/voxceleb/vox1_test_wav"],
                     help='The path of the evaluation DAE_data, eg:"/data08/VoxCeleb1/test/wav" in my case')
 parser.add_argument('--eval_list', type=list, default=["exps/voxceleb1_o.txt"],
                     help='The path of the evaluation list, veri_test2.txt comes from https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/veri_test2.txt')
 
-# parser.add_argument('--eval_path', type=list, default=["/g813_u1/wmnt/voxceleb/vox1_test_wav", "/g813_u1/wmnt/voxceleb/vox1_dev_wav/wav"],
-#                     help='The path of the evaluation DAE_data, eg:"/data08/VoxCeleb1/test/wav" in my case')
-# parser.add_argument('--eval_list', type=list, default=["exps/voxceleb1_o.txt", "exps/voxceleb1_e.txt", "exps/voxceleb1_h.txt"],
-#                     help='The path of the evaluation list, veri_test2.txt comes from https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/veri_test2.txt')
-
-parser.add_argument('--musan_path', type=str, default="/g813_u1/wmnt/voxceleb/musan",
+parser.add_argument('--musan_path', type=str, default="/root/private_data/wmnt/voxceleb/musan",
                     help='The path to the MUSAN set, eg:"/data08/Others/musan_split" in my case')
-parser.add_argument('--rir_path', type=str, default="/g813_u1/wmnt/voxceleb/RIRS_NOISES/simulated_rirs",
+parser.add_argument('--rir_path', type=str, default="/root/private_data/wmnt/voxceleb/RIRS_NOISES/simulated_rirs",
                     help='The path to the RIR set, eg:"/data08/Others/RIRS_NOISES" in my case')
-
-# 超算服务器
-
-# # parser.add_argument('--train_list', type=str, default="exps/vox2_train.txt",
-# # 					help='The path of the training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
-# # parser.add_argument('--train_path', type=str, default="/root/private_data/wmnt/voxceleb/voxceleb2_dev",
-# # 					help='The path of the training DAE_data, eg:"/data08/VoxCeleb2/train/wav" in my case')
-# parser.add_argument('--train_list', type=str, default="exps/vox1_train_v2.txt",
-#                     help='The path of the training list, https://www.robots.ox.ac.uk/~vgg/data/voxceleb/meta/train_list.txt')
-# parser.add_argument('--train_path', type=str, default="/root/private_data/wmnt/voxceleb/voxceleb1_dev",
-#                     help='The path of the training DAE_data, eg:"/data08/VoxCeleb2/train/wav" in my case')
-# parser.add_argument('--eval_path', type=str, default="/root/private_data/wmnt/voxceleb/voxceleb1_o",
-#                     help='The path of the evaluation DAE_data, eg:"/data08/VoxCeleb1/test/wav" in my case')
-# parser.add_argument('--musan_path', type=str, default="/root/private_data/wmnt/musan",
-#                     help='The path to the MUSAN set, eg:"/data08/Others/musan_split" in my case')
-# parser.add_argument('--rir_path', type=str, default="/root/private_data/wmnt/RIRS_NOISES/simulated_rirs",
-#                     help='The path to the RIR set, eg:"/data08/Others/RIRS_NOISES" in my case')
-
-
-
-
 
 ## Training Settings
 parser.add_argument('--model_mode', type=str, default='Taylor_DGCNN', help='YZX | Taylor_DGCNN')
@@ -82,17 +56,12 @@ parser.add_argument('--test_step', type=int, default=1, help='Test and save ever
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate 0.001')
 parser.add_argument("--lr_decay", type=float, default=0.97, help='0.97 Learning rate decay every [test_step] epochs')
 
-
-
 parser.add_argument('--save_path', type=str, default="exps/exp1", help='Path to save the score_ex_EcapaC1024_aam_v2_b400txt and models/ and error.txt')
 # parser.add_argument('--initial_model', type=str, default="exps/exp1/model/model_0088.model", help='Path of the initial_model')
-# parser.add_argument('--initial_model', type=str, default="exps/pretrain.model", help='Path of the initial_model')
 parser.add_argument('--initial_model', type=str, default="", help='Path of the initial_model')
 parser.add_argument('--teacher_model', type=str, default="exps/pretrain.model", help='Path of the teacher model')
 
 ## Model and Loss settings
-
-
 # parser.add_argument('--eval', dest='eval', action='store_true', help='Only do evaluation')
 parser.add_argument('--eval', type=bool, default=False, help='Only do evaluation')
 parser.add_argument('--eval_split_num', type=int, default=5, help='score every [eval_split_num] num')
@@ -105,13 +74,11 @@ args = init_args(args)
 
 # torch.manual_seed(0)
 # random.seed(0)  # 默认100
-
 # cuda 设置
 torch.cuda.set_device(args.deviceno)  # 0 / 1 目前两个
-# s = ModelMaster(**vars(args))
 
 ## Define the train_data loader
-trainloader = train_loader(**vars(args))
+trainloader = origin_train_loader(**vars(args))
 trainLoader = torch.utils.data.DataLoader(trainloader, batch_size=args.batch_size, shuffle=True, num_workers=args.n_cpu,
                                           drop_last=True, pin_memory=True)
 
@@ -151,8 +118,9 @@ if args.model_mode == 'Taylor_DGCNN':
         # args.WavLMForXVector = model
         # load
         # 2.
-        teacher = torch.jit.load('exps/ecapa2.pt', map_location="cuda:0")
-        args.teacher = teacher
+        # teacher = torch.jit.load('exps/ecapa2.pt', map_location="cuda:0")
+        # args.teacher = teacher
+        #     3. 论文模型
         s = ModelMaster(**vars(args))
         # s.load_parameters(load_path, deviceno=args.deviceno)
         print(time.strftime("%Y-%m-%d %H:%M:%S"), "Model %s loaded from previous state!" % (load_path))
@@ -193,12 +161,6 @@ if args.model_mode == 'Taylor_DGCNN':
     ## Otherwise, system will train from scratch
     else:
         epoch = 1
-        # teacher = torch.jit.load('exps/ecapa2.pt', map_location="cuda:0")
-
-        # teacher = Ecapa_Tdnn_Model(C=1024, out_dim=192)
-        # teacher.load_teacher_parameters('exps/pretrain.model')
-
-        # args.teacher = teacher
         s = ModelMaster(**vars(args))
         # s.load_needed_parameters('exps/pretrain.model', 0)
         print("从头训练!!!!")
@@ -243,7 +205,7 @@ while (1):
     # acc_List 手动对应吧
     # loss, lr, acc_List = s.train_network(epoch=epoch, loader=trainLoader, emb_kind_num=args.emb_kind_num, err_save_path=args.err_save_path)
     # 再次随机取样
-    # trainloader = train_loader(**vars(args))
+    # trainloader = deal_train_loader(**vars(args))
     # trainLoader = torch.utils.data.DataLoader(trainloader, batch_size=args.batch_size, shuffle=True,
     #                                           num_workers=args.n_cpu,
     #                                           drop_last=True, pin_memory=True)
