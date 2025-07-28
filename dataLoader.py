@@ -6,7 +6,8 @@ import glob, numpy as np, os, random, torch, torchaudio
 from scipy import signal
 import pandas as pd
 
-class train_loader(object):
+# 加快时间 保存特征 从而减少计算、io 带来时间截取的固定 类似于seed
+class deal_train_loader(object):
 	def __init__(self, train_list, train_path, musan_path, rir_path, num_frames, **kwargs):
 		self.train_path = train_path
 		self.num_frames = num_frames
@@ -145,7 +146,7 @@ class train_loader(object):
 			audio, _ = torchaudio.load(audioPath)
 		return audio
 
-class as_train_loader(object):
+class origin_train_loader(object):
 	def __init__(self, train_list, train_path, musan_path, rir_path, num_frames, **kwargs):
 		self.train_path = train_path
 		self.num_frames = num_frames
@@ -209,8 +210,8 @@ class as_train_loader(object):
 		audio = audio[start_frame:start_frame + length]
 		audio = np.stack([audio], axis=0)
 		# Data Augmentation
-		# augtype = random.randint(0, 5)
-		augtype = 0
+		augtype = random.randint(0, 5)
+
 		if augtype == 0:   # Original
 			audio = audio
 		elif augtype == 1: # Reverberation
@@ -290,12 +291,11 @@ class test_loader(object):
 #  https://pytorch.org/audio/2.2.0/_modules/torchaudio/datasets/voxceleb1.html
 	def __getitem__(self, index):
 		# Read the utterance and randomly select the segment
-		assert (len(self.test_path) > 0), "没有测试样本 -- err from yzx"
+		assert (len(self.test_path) > 0), "没有一个测试集 -- err from yzx"
 		file_path_wav = self.test_list[index]
 		# audio, _ = soundfile.read(os.path.join(self.test_path, file_path_wav))
-		if len(self.test_path) > 1 and os.path.exists(os.path.join(self.test_path[1], file_path_wav)):
-			audio, _ = torchaudio.load(os.path.join(self.test_path[1], file_path_wav))
-		elif os.path.exists(os.path.join(self.test_path[0], file_path_wav)):
+		# 多个测试集的测试
+		if os.path.exists(os.path.join(self.test_path[0], file_path_wav)):
 			audio, _ = torchaudio.load(os.path.join(self.test_path[0], file_path_wav))
 		else:
 			raise ValueError("不支持数据！")

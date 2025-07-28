@@ -54,8 +54,8 @@ class ModelMaster(nn.Module):
         # summary(self.GPT_IConv_NN, [(80, 202)])  # 1429层  2117层
         self.teacher_Contrastive_loss = MSELoss().cuda()
         # self.teacher_Contrastive_loss = KLDivLoss().cuda()
-        self.Control_Contrastive_loss = AAMsoftmax(n_class=n_class, dim=dim, m=m, s=s).cuda()
-        # self.Control_Contrastive_loss = Control_Contrastive(n_class=n_class, dim=dim, m=m, s=s).cuda()
+        # self.Control_Contrastive_loss = AAMsoftmax(n_class=n_class, dim=dim, m=m, s=s).cuda()
+        self.Control_Contrastive_loss = Control_Contrastive(n_class=n_class, dim=dim, m=m, s=s).cuda()
         # self.Control_Contrastive_loss = CircleLoss(m=0.35, gamma=60).cuda()
         # self.BCELoss    = MSELoss().cuda()
         # self.optim           = torch.optim.SGD(self.parameters(), lr = 0.2, weight_decay = 1e-4, momentum=0.9)
@@ -136,8 +136,7 @@ class ModelMaster(nn.Module):
             # score_D = self.BCELoss(o_s_fake_G, o_t_real)
             # score_D_2 = self.BCELoss(o_s_fake_D, fake)
             # score_D = 0.7 * score_D_1 + 0.3 * score_D_2
-        # return sv + loss + circle, ("acc", "acc_center"), predict_embedding, embedding_tuple,  # 返回向量均是1024
-        return sv + loss + circle, ("acc", ), predict_embedding, teacher_tuple,  # 返回向量均是1024
+        return sv + loss + circle, ("acc", "acc_center"), predict_embedding, embedding_tuple,  # 返回向量均是1024
 
     def utt2spk(self, spk, cohort_embds):
         cohort_dict = {}
@@ -267,9 +266,8 @@ class ModelMaster(nn.Module):
         eval_split_num = testLoader.dataset.eval_split_num
         pc = math.floor(dataset_len/testLoader.batch_size) + 1
         print("测试：mininterval={}, maxinterval={}, total={}".format(20, 60, pc))
-        # for num, (full_utter, split_utt, file, start_frame) in tqdm.tqdm(enumerate(testLoader, start=1), total=pc):
-        for num, (full_utter, split_utt, file, start_frame) in tqdm.tqdm(enumerate(testLoader, start=1), mininterval=20, maxinterval=60, total=pc):
-        # for num, (full_utter, split_utt, file, start_frame) in enumerate(testLoader, start=1):
+        # for num, (full_utter, split_utt, file, start_frame) in tqdm.tqdm(enumerate(testLoader, start=1), mininterval=20, maxinterval=60, total=pc):
+        for num, (full_utter, split_utt, file, start_frame) in enumerate(testLoader, start=1):
             with torch.no_grad():
                 full_utter_list = []
                 for _ in range(len(file)):
@@ -290,27 +288,20 @@ class ModelMaster(nn.Module):
                     emds_dict[val] = [full_utter_list[idx], [j[idx*eval_split_num:(idx+1)*eval_split_num] for j in sample2]]
         scores, labels = [], []
         scores_full, scores_spilt = [], []
-
-        # as normal  from yzx  2025年4月4日12:45:49
         as_scores = []
         as_scores_full, as_scores_spilt = [], []
-
         multi_test_EERS, multi_test_minDCFS = {}, {}
         as_multi_test_EERS, as_multi_test_minDCFS = {}, {}
 
         # np.save('exps/emds_dict/emds_dict_ecapa2_2s.npy', emds_dict, allow_pickle=True)
         # np.save('exps/emds_dict/emds_dict_ecapa2_2sAndFull.npy', emds_dict, allow_pickle=True)
         # quit()
-        # 调试用  当然也可加快训练速度
-        emds_dict = np.load('exps/emds_dict/emds_dict_ecapa2_2s.npy', allow_pickle=True).item()
-        emds_dict = np.load('exps/emds_dict/emds_dict_ecapa2_2sAndFull.npy', allow_pickle=True).item()
-        # emds_dict = np.load('exps/as_normal/emds_v2.npy', allow_pickle=True)
-        # ecapa2 选自v2的dev  top500 这里直接加载
-        # imposter_emds = np.load('demo/emds_dict.npy', allow_pickle=True).item()
+        # 调试用  当然也可加快训练速度 保存测试的嵌入向量
+        if emds_dict is None:
+            emds_dict = np.load('exps/emds_dict/test_emds_dict_TRCNN_2s.npy', allow_pickle=True).item()
+        # top500 这里直接加载
         if as_normal:
-            imposter_emds = torch.tensor(np.load('exps/as_normal/emds_v2_ecapa2_2s.npy', allow_pickle=True))
-        # imposter_emds = F.normalize(imposter_emds, dim=1, p=2) # 效果不好 表现为融合的语音太杂
-        # imposter_emds = emds_dict.copy()
+            imposter_emds = torch.tensor(np.load('exps/as_normal/train_emds_Center_TRCNN_3s.npy', allow_pickle=True))
         global_cohort_embds_dict = {}
         adaptive_cohort_size = 500
         for ll in range(len(testLoader.dataset.test_list_path)):
@@ -320,7 +311,6 @@ class ModelMaster(nn.Module):
                 labels.append(int(line[0]))
                 utt_row_enr = emds_dict[line[1]]
                 utt_row_tst = emds_dict[line[2]]
-
                 # 只获取 冒认者 去重
                 if as_normal and as_normal_dict:
                     spk_enr = line[1].split('/')[0]

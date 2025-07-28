@@ -4,7 +4,7 @@ import sys
 import tqdm
 
 from ModelMaster import ModelMaster
-from dataLoader import as_train_loader
+from dataLoader import origin_train_loader
 import numpy as np
 import torch.nn.functional as F
 
@@ -67,7 +67,7 @@ def get_args(num_frames=None):
     torch.cuda.set_device(args.deviceno)
 
 
-    trainloader = as_train_loader(**vars(args))
+    trainloader = origin_train_loader(**vars(args))
     loader = torch.utils.data.DataLoader(trainloader, batch_size=args.batch_size, shuffle=True,
                                               num_workers=args.n_cpu,
                                               drop_last=True, pin_memory=True)

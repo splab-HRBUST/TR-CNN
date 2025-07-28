@@ -14,8 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
 
-from selectModel import DGCN
-
 
 class wav_pre_process_fbank_extract(nn.Module):
     def __init__(self, **kwargs):
@@ -270,7 +268,7 @@ class Complex_wav_pre_process_melfbank(nn.Module):
         return x
 
 # QKVCNN 方便跑实验 改为PConv  分别用n=1,2 去模拟
-# class PConv(nn.Module):
+# class TR_Conv(nn.Module):
 #     # unit_FZ 一定要是奇数 不然不好处理
 #     def __init__(self, in_channels=1, out_channels=1, m=2, n=1, groups=None, dilation=1, bias=True):
 #         super().__init__()
@@ -354,13 +352,11 @@ class Complex_wav_pre_process_melfbank(nn.Module):
 #             #         taylor_eq_list.append(F.pad(k_element, self.pad_num(T, k_element), "reflect"))
 #             # taylor_eq_dia = torch.softmax(taylor_eq_list[1] * taylor_eq_list[2], dim=1) * taylor_eq_list[0]
 #
-#
-#
 #             taylor_eq[:, :, i::self.dilation] = taylor_eq_dia
 #         return taylor_eq
 
-# 卷积 定义  PConv: Powers-of-Two Interpolation Convolution
-class PConv(nn.Module):
+# 卷积 定义  TR_Conv: Powers-of-Two Interpolation Convolution
+class TR_Conv(nn.Module):
     # unit_FZ 一定要是奇数 不然不好处理
     def __init__(self, in_channels=1, out_channels=1, m=1, n=0, groups=1, dilation=1, drop=0,
                  bias=True, attention=False, head_paramisloate=False,
@@ -813,10 +809,10 @@ class New_FwSEModule(nn.Module):
         self.fw_se = nn.Sequential(
             nn.AdaptiveAvgPool2d((2, 1)),
             nSqueeze(self.dim),
-            PConv(channels, bottleneck, m=1, n=2, concatenate=True),
+            TR_Conv(channels, bottleneck, m=1, n=2, concatenate=True),
             nn.ReLU(),
             # nn.BatchNorm1d(bottleneck),  # I remove this layer
-            PConv(bottleneck, channels, m=1, n=2, concatenate=True),
+            TR_Conv(bottleneck, channels, m=1, n=2, concatenate=True),
             nn.Sigmoid(),
         )
         self.se_w = nn.Parameter(torch.FloatTensor(2, 2), requires_grad=True)
@@ -829,8 +825,8 @@ class New_FwSEModule(nn.Module):
 # class New_Ponv2D(nn.Module):
 #     def __init__(self, m=3, in_dim=256, freq_fuse_num=2):
 #         super().__init__()
-#         self.Ponv2D_1 = PConv(m=m, n=1, in_channels=in_dim, out_channels=in_dim, G_add=False, groups=in_dim//freq_fuse_num)
-#         self.Ponv_fuse = PConv(m=1, n=0, in_channels=2 * in_dim, out_channels=in_dim, groups=in_dim//freq_fuse_num)
+#         self.Ponv2D_1 = TR_Conv(m=m, n=1, in_channels=in_dim, out_channels=in_dim, G_add=False, groups=in_dim//freq_fuse_num)
+#         self.Ponv_fuse = TR_Conv(m=1, n=0, in_channels=2 * in_dim, out_channels=in_dim, groups=in_dim//freq_fuse_num)
 #         self.Pconv_bn1 = nn.BatchNorm1d( 2 * in_dim)
 #         self.Pconv_bn2 = nn.BatchNorm1d(in_dim)
 #         self.relu = nn.ReLU()
@@ -846,9 +842,9 @@ class New_FwSEModule(nn.Module):
 class New_Ponv2D(nn.Module):
     def __init__(self, m=3, n=1, in_dim=80, out_dim=512//4, concatenate=True):
         super().__init__()
-        self.Ponv_ft = PConv(m=m, n=n, in_channels=in_dim, out_channels=out_dim, concatenate=concatenate)
+        self.Ponv_ft = TR_Conv(m=m, n=n, in_channels=in_dim, out_channels=out_dim, concatenate=concatenate)
         # self.head = math.floor(2 ** (n - 1))
-        # self.Ponv_ft = PConv(m=m, n=n, in_channels=in_dim, out_channels=out_dim//(2 * self.head), groups=16)
+        # self.Ponv_ft = TR_Conv(m=m, n=n, in_channels=in_dim, out_channels=out_dim//(2 * self.head), groups=16)
         self.bn = nn.BatchNorm1d(out_dim)
         self.relu = nn.ReLU()
     def forward(self, x):
@@ -872,10 +868,10 @@ class New_SEModule(nn.Module):
         self.dim = -1
         self.new_se = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
-            PConv(channels, bottleneck, m=1, n=0),
+            TR_Conv(channels, bottleneck, m=1, n=0),
             nn.ReLU(),
             # nn.BatchNorm1d(bottleneck), # speechbrain  remove this layer
-            PConv(bottleneck, channels, m=1, n=0),
+            TR_Conv(bottleneck, channels, m=1, n=0),
             nn.Sigmoid(),
         )
 
@@ -930,10 +926,10 @@ class UpChannel_TDNN_PConv(nn.Module):
 
     def __init__(self, in_dim, out_dim, m=5, n=0, groups=None):
         super().__init__()
-        self.upChannel1 = PConv(in_dim, out_dim, m=m, n=n, groups=groups)
-        self.upChannel2 = PConv(in_dim, out_dim, m=m, n=n, groups=groups)
-        self.upChannel3 = PConv(in_dim, out_dim, m=m, n=n, groups=groups)
-        self.upChannel4 = PConv(in_dim, out_dim, m=m, n=n, groups=groups)
+        self.upChannel1 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups)
+        self.upChannel2 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups)
+        self.upChannel3 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups)
+        self.upChannel4 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups)
         self.relu = nn.ReLU()
         self.bn1 = nn.BatchNorm1d(out_dim)
         self.bn2 = nn.BatchNorm1d(out_dim)
@@ -998,10 +994,10 @@ class UpChannel_lr_pn_PConv(nn.Module):
 
     def __init__(self, in_dim, out_dim, m=5, n=0, groups=1, concatenate=False, attention=False, head_paramisloate=False):
         super().__init__()
-        self.upChannel1 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel2 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel3 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel4 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel1 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel2 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel3 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel4 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
         self.relu = nn.ReLU()
         self.elu = nn.ELU()
         self.pReLU_up1 = nn.PReLU()
@@ -1073,10 +1069,10 @@ class New_UpChannel_lr_pn_PConv(nn.Module):
 
     def __init__(self, in_dim, out_dim, m=5, n=0, groups=1, concatenate=False, attention=False, head_paramisloate=False):
         super().__init__()
-        self.upChannel1 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel2 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel3 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
-        self.upChannel4 = PConv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel1 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel2 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel3 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel4 = TR_Conv(in_dim, out_dim, m=m, n=n, groups=groups, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
         self.relu = nn.ReLU()
         self.gelu = QuickGELU()
         self.pReLU_up1 = nn.PReLU(init=0.998)
@@ -1160,7 +1156,7 @@ class New_UpChannel_lr_pn_PConv(nn.Module):
         self_state[name].copy_(param)
 
 
-# Bottle2neck 定义  DGCN/PConv
+# Bottle2neck 定义  DGCN/TR_Conv
 class Bottle2neck(nn.Module):
 
     def __init__(self, inplanes, planes, kernel_size=None, dilation=None, scale=8):
@@ -1217,20 +1213,20 @@ class New_Bottle2neck(nn.Module):
         assert inplanes % scale == 0
         assert planes % scale == 0
         width = int(math.floor(planes / scale))
-        self.conv1 = PConv(inplanes, width * scale, m=1)
+        self.conv1 = TR_Conv(inplanes, width * scale, m=1)
         self.bn1 = nn.BatchNorm1d(width * scale)
         self.nums = scale - 1
         convs = []
         bns = []
         for i in range(self.nums):
-            convs.append(PConv(width, width, m=m, dilation=dilation, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate))
+            convs.append(TR_Conv(width, width, m=m, dilation=dilation, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate))
             bns.append(nn.BatchNorm1d(width))
         self.convs = nn.ModuleList(convs)
         self.bns = nn.ModuleList(bns)
-        # self.conv3 = PConv(width * scale, planes, m=1)
+        # self.conv3 = TR_Conv(width * scale, planes, m=1)
         # self.bn3 = nn.BatchNorm1d(planes)
         self.relu = nn.ReLU()
-        self.conv3 = PConv(width * scale, planes, m=1, n=0)
+        self.conv3 = TR_Conv(width * scale, planes, m=1, n=0)
         self.bn3 = nn.BatchNorm1d(width * scale)
         self.width = width
         self.se = New_SEModule(channels = planes)
@@ -1386,7 +1382,7 @@ class New_STFT_LF_Block(nn.Module):
         self.layer3_2d = New_LF_Block(m=m, in_dim=in_dim, freq_fuse_num=64)
         self.layer4_2d = New_LF_Block(m=m, in_dim=in_dim, freq_fuse_num=32)
         self.layer5_2d = New_LF_Block(m=m, in_dim=in_dim, freq_fuse_num=16)
-        self.connect_layer = PConv(m=2, n=4, in_channels=in_dim, out_channels=192*16, concatenate=True)
+        self.connect_layer = TR_Conv(m=2, n=4, in_channels=in_dim, out_channels=192*16, concatenate=True)
     def forward(self, x):
         x = self.layer1_2d(x)
         x = self.layer2_2d(x)
@@ -1408,7 +1404,7 @@ class New_STFT_LF_Block(nn.Module):
 #         scale = 8
 #         # self.wav_pre_process = wav_pre_process_melfbank()
 #         self.upChannel = New_STFT_LF_Block(in_dim=in_dim, m=3)
-#         # self.upChannel = PConv(in_dim, C, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+#         # self.upChannel = TR_Conv(in_dim, C, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
 #         # self.upChannel = New_UpChannel_lr_pn_PConv(80, C//2, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
 #
 #         self.relu = nn.ReLU()
@@ -1419,38 +1415,38 @@ class New_STFT_LF_Block(nn.Module):
 #         # self.layer4 = New_Bottle2neck(C, C, m=3, dilation=5, scale=scale, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
 #         # I fixed the shape of the output from MFA layer, that is close to the setting from ECAPA paper.
 #
-#         self.layer5 = PConv(3072, 1024,  m=1, n=1)
+#         self.layer5 = TR_Conv(3072, 1024,  m=1, n=1)
 #         self.bn5 = nn.BatchNorm1d(1024)
-#         self.layer6 = PConv(1024, 1024,  m=1, n=1)
+#         self.layer6 = TR_Conv(1024, 1024,  m=1, n=1)
 #         self.bn6 = nn.BatchNorm1d(1024)
 #
-#         self.layer7 = PConv(1024, 1024,  m=3, n=1)
+#         self.layer7 = TR_Conv(1024, 1024,  m=3, n=1)
 #         self.bn7 = nn.BatchNorm1d(1024)
 #
-#         self.layer8 = PConv(1024, 1024,  m=1, n=1)
+#         self.layer8 = TR_Conv(1024, 1024,  m=1, n=1)
 #         self.bn8 = nn.BatchNorm1d(1024)
 #         self.se = SEModule(1024)
-#         self.layer9 = PConv(1024, 1536,  m=1, n=1)
+#         self.layer9 = TR_Conv(1024, 1536,  m=1, n=1)
 #
 #         # self.layer5 = nn.Sequential(
-#         #     PConv(4 * C, 128,  m=mn, n=mn-1),
+#         #     TR_Conv(4 * C, 128,  m=mn, n=mn-1),
 #         #     nn.ReLU(),
 #         #     nn.BatchNorm1d(128),
 #         #     nn.Tanh(),  # I add this layer
-#         #     PConv(128, 1536,  m=mn, n=mn-1),
+#         #     TR_Conv(128, 1536,  m=mn, n=mn-1),
 #         # )
 #         self.attention = nn.Sequential(
-#             PConv(4608, 128,  m=1, n=0),
+#             TR_Conv(4608, 128,  m=1, n=0),
 #             nn.ReLU(),
 #             nn.BatchNorm1d(128),
 #             nn.Tanh(),  # I add this layer
-#             PConv(128, 1536,  m=1, n=0),
+#             TR_Conv(128, 1536,  m=1, n=0),
 #             nn.Softmax(dim=2),
 #         )
 #         self.bn10 = nn.BatchNorm1d(3072)
 #         # self.drop = nn.Dropout(0.25)
 #         self.fc11 = nn.Linear(3072, dim)
-#         # self.fc6 = PConv(3072, dim, m=mn, n=mn-1)
+#         # self.fc6 = TR_Conv(3072, dim, m=mn, n=mn-1)
 #         self.bn11 = nn.BatchNorm1d(dim)
 #
 #     def forward(self, x):
@@ -1561,7 +1557,7 @@ class New_Ecapa_Tdnn_Model(nn.Module):
         # self.upChannel = New_LF_Block(m=5, n=n, in_dim=in_dim, out_dim=C)
         # self.upChannel1 = New_LF_Block(m=3, n=n, in_dim=C, out_dim=C)
         # self.upChannel2 = New_LF_Block(m=3, n=n, in_dim=C, out_dim=C)
-        self.upChannel = PConv(in_dim, C, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
+        self.upChannel = TR_Conv(in_dim, C, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
         # self.upChannel = New_UpChannel_lr_pn_PConv(80, C//2, m=5, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
 
         self.relu = nn.ReLU()
@@ -1573,29 +1569,29 @@ class New_Ecapa_Tdnn_Model(nn.Module):
         self.layer3 = New_Bottle2neck(C, C, m=3, dilation=4, scale=scale, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
         # self.layer4 = New_Bottle2neck(C, C, m=3, dilation=5, scale=scale, n=n, concatenate=concatenate, attention=attention, head_paramisloate=head_paramisloate)
         # I fixed the shape of the output from MFA layer, that is close to the setting from ECAPA paper.
-        self.layer5 = PConv(3 * C, 1536,  m=1, n=3, concatenate=concatenate, wide_erf=True)
+        self.layer5 = TR_Conv(3 * C, 1536,  m=1, n=3, concatenate=concatenate, wide_erf=True)
 
         # downm2n4_2
         # self.layer5 = nn.Conv1d(3 * C, 1536,  kernel_size=1)
         # self.layer5 = nn.Sequential(
-        #     PConv(4 * C, 128,  m=mn, n=mn-1),
+        #     TR_Conv(4 * C, 128,  m=mn, n=mn-1),
         #     nn.ReLU(),
         #     nn.BatchNorm1d(128),
         #     nn.Tanh(),  # I add this layer
-        #     PConv(128, 1536,  m=mn, n=mn-1),
+        #     TR_Conv(128, 1536,  m=mn, n=mn-1),
         # )
         self.attention = nn.Sequential(
-            PConv(4608, 128,  m=1, n=0),
+            TR_Conv(4608, 128,  m=1, n=0),
             nn.ReLU(),
             nn.BatchNorm1d(128),
             nn.Tanh(),  # I add this layer
-            PConv(128, 1536,  m=1, n=0),
+            TR_Conv(128, 1536,  m=1, n=0),
             nn.Softmax(dim=2),
         )
         self.bn5 = nn.BatchNorm1d(3072)
         # self.drop = nn.Dropout(0.25)
         self.fc6 = nn.Linear(3072, out_dim)
-        # self.fc6 = PConv(3072, dim, m=mn, n=mn-1)
+        # self.fc6 = TR_Conv(3072, dim, m=mn, n=mn-1)
         self.bn6 = nn.BatchNorm1d(out_dim)
 
     def forward(self, x):
@@ -1723,30 +1719,30 @@ class PConv_DGCN_Double_Model(nn.Module):
                         head_paramisloate=head_paramisloate)
 
         self.layer_eight_up = nn.Sequential(
-            PConv(C * 2, 128, m=2, n=n),
+            TR_Conv(C * 2, 128, m=2, n=n),
             nn.ReLU(),
             nn.BatchNorm1d(128),
             # nn.Dropout(dropout),
             nn.Tanh(),  # I add this layer
-            PConv(128, C // 2, m=2, n=n),
+            TR_Conv(128, C // 2, m=2, n=n),
             nn.BatchNorm1d(C // 2),
         )
         self.layer_eight_down = nn.Sequential(
-            PConv(C * 2, 128, m=2, n=n),
+            TR_Conv(C * 2, 128, m=2, n=n),
             nn.ReLU(),
             nn.BatchNorm1d(128),
             # nn.Dropout(dropout),
             nn.Tanh(),  # I add this layer
-            PConv(128, C // 2, m=2, n=n),
+            TR_Conv(128, C // 2, m=2, n=n),
             nn.BatchNorm1d(C // 2),
         )
         self.layer_eight_mid = nn.Sequential(
-            PConv(C * 4, 128, m=2, n=n),
+            TR_Conv(C * 4, 128, m=2, n=n),
             nn.ReLU(),
             nn.BatchNorm1d(128),
             # nn.Dropout(dropout),
             nn.Tanh(),  # I add this layer
-            PConv(128, C, m=2, n=n),
+            TR_Conv(128, C, m=2, n=n),
             nn.BatchNorm1d(C),
         )
         self.bn1_updown = nn.BatchNorm1d(C * 2)
@@ -1822,9 +1818,9 @@ class New_PConv_DGCN_Double_Model(nn.Module):
         self.layer4 = New_Bottle2neck(C, C, m=3, dilation=4, scale=8, n=n, concatenate=concatenate, attention=attention,
                         head_paramisloate=head_paramisloate)
 
-        self.layer_eight_up = PConv(2 * C, 1536//2,  m=1, n=3)
-        self.layer_eight_down = PConv(2 * C, 1536,  m=1, n=3)
-        self.layer_eight_mid = PConv(3 * C, 1536//2, m=1, n=3)
+        self.layer_eight_up = TR_Conv(2 * C, 1536//2,  m=1, n=3)
+        self.layer_eight_down = TR_Conv(2 * C, 1536,  m=1, n=3)
+        self.layer_eight_mid = TR_Conv(3 * C, 1536//2, m=1, n=3)
         self.bn1_updown = nn.BatchNorm1d(C * 2)
         self.fc_updown = nn.Linear(C * 2, out_dim)
         self.bn2_updown = nn.BatchNorm1d(out_dim)
@@ -1875,10 +1871,10 @@ class Free_Unified_Meta_Model(nn.Module):
 
     def __init__(self, in_dim=80, C=512, out_dim=192, dropout=0.3):
         super().__init__()
-        self.layer1 = PConv(in_channels=80, out_channels=C, m=5, n=4, attention=True, head_paramisloate=True, concatenate=True)
-        self.layer2 = PConv(in_channels=C*3, out_channels=C, m=1, n=0)
-        self.layer3 = PConv(in_channels=C, out_channels=C, m=3, n=2, attention=True, head_paramisloate=True, concatenate=True)
-        self.layer4 = PConv(in_channels=C*2, out_channels=3*C, m=1, n=0)
+        self.layer1 = TR_Conv(in_channels=80, out_channels=C, m=5, n=4, attention=True, head_paramisloate=True, concatenate=True)
+        self.layer2 = TR_Conv(in_channels=C*3, out_channels=C, m=1, n=0)
+        self.layer3 = TR_Conv(in_channels=C, out_channels=C, m=3, n=2, attention=True, head_paramisloate=True, concatenate=True)
+        self.layer4 = TR_Conv(in_channels=C*2, out_channels=3*C, m=1, n=0)
 
         self.bn1 = nn.BatchNorm1d(C * 3)
         self.bn2 = nn.BatchNorm1d(C * 3)
